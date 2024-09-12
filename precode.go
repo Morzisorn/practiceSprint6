@@ -51,8 +51,10 @@ func getTasks(res http.ResponseWriter, req *http.Request) {
 
 	res.Header().Set("Content-Type", "application/json")
 	res.WriteHeader(http.StatusOK)
-	res.Write(resp)
+	_, _ = res.Write(resp)
 }
+
+var taskAlreadyExists = "task already exists"
 
 func postTask(res http.ResponseWriter, req *http.Request) {
 	var task Task
@@ -70,6 +72,11 @@ func postTask(res http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	_, exist := tasks[task.ID]
+	if exist {
+		http.Error(res, taskAlreadyExists, http.StatusBadRequest)
+		return
+	}
 	tasks[task.ID] = task
 
 	res.WriteHeader(http.StatusCreated)
