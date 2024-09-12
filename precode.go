@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 
@@ -40,13 +42,87 @@ var tasks = map[string]Task{
 }
 
 // Ниже напишите обработчики для каждого эндпоинта
-// ...
+func getTasks(res http.ResponseWriter, req *http.Request) {
+	resp, err := json.Marshal(tasks)
+	if err != nil {
+		http.Error(res, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	res.Header().Set("Content-Type", "application/json")
+	res.WriteHeader(http.StatusOK)
+	_, _ = res.Write(resp)
+}
+
+var taskAlreadyExists = "task already exists"
+
+func postTask(res http.ResponseWriter, req *http.Request) {
+	var task Task
+	var buf bytes.Buffer
+
+	defer req.Body.Close()
+	_, err := buf.ReadFrom(req.Body)
+	if err != nil {
+		http.Error(res, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err = json.Unmarshal(buf.Bytes(), &task); err != nil {
+		http.Error(res, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	_, exist := tasks[task.ID]
+	if exist {
+		http.Error(res, taskAlreadyExists, http.StatusBadRequest)
+		return
+	}
+	tasks[task.ID] = task
+
+	res.WriteHeader(http.StatusCreated)
+}
+
+var errTaskNotFound = "task not found"
+
+func getTask(res http.ResponseWriter, req *http.Request) {
+	id := chi.URLParam(req, "id")
+
+	task, ok := tasks[id]
+	if !ok {
+		http.Error(res, errTaskNotFound, http.StatusBadRequest)
+	}
+
+	resp, err := json.Marshal(task)
+	if err != nil {
+		http.Error(res, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	res.Header().Set("Content-Type", "application/json")
+	res.WriteHeader(http.StatusOK)
+	res.Write(resp)
+
+}
+
+func deleteTask(res http.ResponseWriter, req *http.Request) {
+	id := chi.URLParam(req, "id")
+
+	_, ok := tasks[id]
+	if !ok {
+		http.Error(res, errTaskNotFound, http.StatusBadRequest)
+	}
+	delete(tasks, id)
+	res.WriteHeader(http.StatusOK)
+}
 
 func main() {
 	r := chi.NewRouter()
 
 	// здесь регистрируйте ваши обработчики
-	// ...
+	r.Get("/tasks", getTasks)
+	r.Post("/tasks", postTask)
+	r.Get("/tasks/{id}", getTask)
+	r.Delete("/tasks/{id}", deleteTask)
 
 	if err := http.ListenAndServe(":8080", r); err != nil {
 		fmt.Printf("Ошибка при запуске сервера: %s", err.Error())
